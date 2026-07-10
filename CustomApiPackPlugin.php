@@ -37,16 +37,14 @@ class CustomApiPackPlugin extends GenericPlugin {
     public function registerApiEndpoints($hookName, $args) {
         $endpoints =& $args[0];
 
-        $endpoints['POST'][] = [
-            'pattern' => '/issues/create-back-issue',
+        $endpoints['POST issues/create-back-issue'] = [
             'handler' => [$this, 'handleCreateBackIssue'],
-            'roles' => [ROLE_ID_MANAGER, ROLE_ID_SITE_ADMIN]
+            'roles' => [\PKP\security\Role::ROLE_ID_MANAGER, \PKP\security\Role::ROLE_ID_SITE_ADMIN]
         ];
 
-        $endpoints['POST'][] = [
-            'pattern' => '/plugins/custom-pack/update-header-image',
+        $endpoints['POST plugins/custom-pack/update-header-image'] = [
             'handler' => [$this, 'handleUpdateHeaderImage'],
-            'roles' => [ROLE_ID_MANAGER, ROLE_ID_SITE_ADMIN]
+            'roles' => [\PKP\security\Role::ROLE_ID_MANAGER, \PKP\security\Role::ROLE_ID_SITE_ADMIN]
         ];
     }
 
@@ -119,7 +117,7 @@ class CustomApiPackPlugin extends GenericPlugin {
             return $response->withJson(['error' => 'Missing header_image_url parameter.'], 400);
         }
 
-        $imgTag = '<div class="custom-journal-header"><img src="' . esc_url($params['header_image_url']) . '" alt="Journal Header Image" style="width:100%; height:auto;"></div>';
+        $imgTag = '<div class="custom-journal-header"><img src="' . htmlspecialchars($params['header_image_url'], ENT_QUOTES, 'UTF-8') . '" alt="Journal Header Image" style="width:100%; height:auto;"></div>';
 
         $this->updateSetting($context->getId(), 'customHeaderImgTag', $imgTag, 'string');
 
@@ -146,7 +144,7 @@ class CustomApiPackPlugin extends GenericPlugin {
         if (empty($headerImgTag)) {
             $defaultImageUrl = $request->getBaseUrl() . '/plugins/generic/customApiPack/default-header.png'; 
             
-            $headerImgTag = '<div class="custom-journal-header"><img src="' . esc_url($defaultImageUrl) . '" alt="Default Journal Header" style="width:100%; height:auto;"></div>';
+            $headerImgTag = '<div class="custom-journal-header"><img src="' . htmlspecialchars($defaultImageUrl, ENT_QUOTES, 'UTF-8') . '" alt="Default Journal Header" style="width:100%; height:auto;"></div>';
         }
 
         $existingHeadData = $templateMgr->getTemplateVars('additionalHeadData') ?? '';
