@@ -6,19 +6,19 @@
  * Distributed under the GNU GPL v3. For full terms see the file LICENSE.
  *
  * @class CustomApiPackPlugin
- * @brief Otomasi Pembuatan Back Issue + Manajemen Gambar Header Jurnal via API.
+ * @brief Back Issue Creation Automation + Journal Header Image Management via API.
  */
 
 namespace APP\plugins\generic\customApiPack;
 
 use PKP\plugins\GenericPlugin;
 use PKP\plugins\Hook;
-use PKP\facades\Repo;
+use APP\facades\Repo;
 
 class CustomApiPackPlugin extends GenericPlugin {
 
     /**
-     * Mendaftarkan plugin ke dalam sistem OJS
+     * Register plugin with OJS system
      */
     public function register($category, $path, $mainContextId = null) {
         if (parent::register($category, $path, $mainContextId)) {
@@ -32,38 +32,45 @@ class CustomApiPackPlugin extends GenericPlugin {
     }
 
     /**
-     * PENDAFTARAN ENDPOINT API KUSTOM
+     * Custom API endpoint registration
      */
     public function registerApiEndpoints($hookName, $args) {
         $endpoints =& $args[0];
+        $handler = $args[1];
 
-        $endpoints['POST issues/create-back-issue'] = [
-            'handler' => [$this, 'handleCreateBackIssue'],
-            'roles' => [\PKP\security\Role::ROLE_ID_MANAGER, \PKP\security\Role::ROLE_ID_SITE_ADMIN]
-        ];
+        if ($handler instanceof \APP\API\v1\issues\IssueHandler) {
+            $endpoints['POST'][] = [
+                'pattern' => $handler->getEndpointPattern() . '/create-back-issue',
+                'handler' => [$this, 'handleCreateBackIssue'],
+                'roles' => [\PKP\security\Role::ROLE_ID_MANAGER, \PKP\security\Role::ROLE_ID_SITE_ADMIN]
+            ];
+        }
 
-        $endpoints['POST plugins/custom-pack/update-header-image'] = [
-            'handler' => [$this, 'handleUpdateHeaderImage'],
-            'roles' => [\PKP\security\Role::ROLE_ID_MANAGER, \PKP\security\Role::ROLE_ID_SITE_ADMIN]
-        ];
+        if ($handler instanceof \APP\API\v1\contexts\ContextHandler) {
+            $endpoints['POST'][] = [
+                'pattern' => $handler->getEndpointPattern() . '/custom-pack/update-header-image',
+                'handler' => [$this, 'handleUpdateHeaderImage'],
+                'roles' => [\PKP\security\Role::ROLE_ID_MANAGER, \PKP\security\Role::ROLE_ID_SITE_ADMIN]
+            ];
+        }
     }
 
     /**
-     * API 1: LOGIKA PEMBUATAN BACK ISSUE & COVER IMAGE
+     * API 1: Back Issue Creation & Cover Image Logic
      */
     public function handleCreateBackIssue($request, $response, $args) {
-        $params = $request->getParsedBody();
-        $context = $request->getContext();
-
-        if (!$context) {
-            return $response->withJson(['error' => 'Journal context not found.'], 404);
-        }
-
-        if (empty($params['title']) || empty($params['year'])) {
-            return $response->withJson(['error' => 'Missing required fields: title and year are mandatory.'], 400);
-        }
-
         try {
+            $params = $request->getParsedBody();
+            $context = $this->getRequest()->getContext();
+
+            if (!$context) {
+                return $response->withJson(['error' => 'Journal context not found.'], 404);
+            }
+
+            if (empty($params['title']) || empty($params['year'])) {
+                return $response->withJson(['error' => 'Missing required fields: title and year are mandatory.'], 400);
+            }
+
             $issue = Repo::issue()->newDataObject();
             $issue->setJournalId($context->getId());
             $issue->setPublished(1);
@@ -72,10 +79,10 @@ class CustomApiPackPlugin extends GenericPlugin {
             $issue->setNumber(isset($params['number']) ? $params['number'] : null);
             
             $primaryLocale = $context->getPrimaryLocale();
-            $issue->setTitle([$primaryLocale => $params['title']], $primaryLocale);
+            $issue->setTitle($params['title'], $primaryLocale);
             
             if (!empty($params['description'])) {
-                $issue->setDescription([$primaryLocale => $params['description']], $primaryLocale);
+                $issue->setDescription($params['description'], $primaryLocale);
             }
 
             if (!empty($params['coverTemporaryFileId'])) {
@@ -97,38 +104,42 @@ class CustomApiPackPlugin extends GenericPlugin {
                 ]
             ], 201);
 
-        } catch (\Exception $e) {
-            return $response->withJson(['error' => $e->getMessage()], 500);
+        } catch (\Throwable $e) {
+            return $response->withJson(['error' => 'Fatal Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()], 500);
         }
     }
 
     /**
-     * API 2: LOGIKA MENERIMA KODE DAN MENGUBAH URL GAMBAR HEADER
+     * API 2: Logic for receiving code and updating header image URL
      */
     public function handleUpdateHeaderImage($request, $response, $args) {
-        $params = $request->getParsedBody();
-        $context = $request->getContext();
+        try {
+            $params = $request->getParsedBody();
+            $context = $this->getRequest()->getContext();
 
-        if (!$context) {
-            return $response->withJson(['error' => 'Context not found.'], 404);
+            if (!$context) {
+                return $response->withJson(['error' => 'Context not found.'], 404);
+            }
+
+            if (empty($params['header_image_url'])) {
+                return $response->withJson(['error' => 'Missing header_image_url parameter.'], 400);
+            }
+
+            $imgTag = '<div class="custom-journal-header"><img src="' . htmlspecialchars($params['header_image_url'], ENT_QUOTES, 'UTF-8') . '" alt="Journal Header Image" style="width:100%; height:auto;"></div>';
+
+            $this->updateSetting($context->getId(), 'customHeaderImgTag', $imgTag, 'string');
+
+            return $response->withJson([
+                'status' => 'success',
+                'message' => 'Journal header image tag updated successfully.'
+            ], 200);
+        } catch (\Throwable $e) {
+            return $response->withJson(['error' => 'Fatal Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()], 500);
         }
-
-        if (empty($params['header_image_url'])) {
-            return $response->withJson(['error' => 'Missing header_image_url parameter.'], 400);
-        }
-
-        $imgTag = '<div class="custom-journal-header"><img src="' . htmlspecialchars($params['header_image_url'], ENT_QUOTES, 'UTF-8') . '" alt="Journal Header Image" style="width:100%; height:auto;"></div>';
-
-        $this->updateSetting($context->getId(), 'customHeaderImgTag', $imgTag, 'string');
-
-        return $response->withJson([
-            'status' => 'success',
-            'message' => 'Journal header image tag updated successfully.'
-        ], 200);
     }
 
     /**
-     * FRONTEND HOOK: MENYUNTIKKAN TAG IMG KE STRUKTUR HALAMAN WEBSITE
+     * FRONTEND HOOK: Inject IMG tag into website page structure
      */
     public function injectImageToHeader($hookName, $args) {
         $templateMgr =& $args[0];
@@ -154,6 +165,6 @@ class CustomApiPackPlugin extends GenericPlugin {
     }
 
     public function getName() { return 'CustomApiPackPlugin'; }
-    public function getDisplayName() { return 'Custom API & Header Pack'; }
-    public function getDescription() { return 'Otomasi pembuatan Back Issue beserta gambar cover dan pembaruan gambar header jurnal via API.'; }
+    public function getDisplayName() { return __('plugins.generic.customApiPack.displayName'); }
+    public function getDescription() { return __('plugins.generic.customApiPack.description'); }
 }

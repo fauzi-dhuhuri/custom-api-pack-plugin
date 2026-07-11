@@ -1,0 +1,18 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: customApiPack\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Translate Toolkit\n"
+
+msgid "plugins.generic.customApiPack.displayName"
+msgstr "Custom API & Header Pack"
+
+msgid "plugins.generic.customApiPack.description"
+msgstr "Automate Back Issue creation with cover images and dynamic journal header updates via API."
+
+msgid "plugins.generic.customApiPack.error.missingFields"
+msgstr "Missing required fields: title and year are mandatory."
+
+msgid "plugins.generic.customApiPack.error.contextNotFound"
+msgstr "Journal context not found."
