@@ -17,6 +17,9 @@ use APP\facades\Repo;
 
 class CustomApiPackPlugin extends GenericPlugin {
 
+    /** @var bool Flag to prevent duplicate script injection */
+    protected bool $injected = false;
+
     /**
      * Register plugin with OJS system
      */
@@ -139,27 +142,38 @@ class CustomApiPackPlugin extends GenericPlugin {
     }
 
     /**
-     * FRONTEND HOOK: Inject IMG tag into website page structure
+     * FRONTEND HOOK: Inject IMG tag into website page structure via JavaScript
      */
     public function injectImageToHeader($hookName, $args) {
-        $templateMgr =& $args[0];
-        $request = $this->getRequest();
-        $context = $request->getContext();
+        if (!$this->injected) {
+            $this->injected = true;
+            $templateMgr =& $args[0];
+            $request = $this->getRequest();
+            $context = $request->getContext();
 
-        if (!$context) {
-            return false;
-        }
+            if (!$context) {
+                return false;
+            }
 
-        $headerImgTag = $this->getSetting($context->getId(), 'customHeaderImgTag');
+            $headerImgTag = $this->getSetting($context->getId(), 'customHeaderImgTag');
 
-        if (empty($headerImgTag)) {
-            $defaultImageUrl = $request->getBaseUrl() . '/plugins/generic/customApiPack/default-header.png'; 
+            if (empty($headerImgTag)) {
+                $defaultImageUrl = $request->getBaseUrl() . '/plugins/generic/customApiPack/default-header.png'; 
+                $headerImgTag = '<div class="custom-journal-header"><img src="' . htmlspecialchars($defaultImageUrl, ENT_QUOTES, 'UTF-8') . '" alt="Default Journal Header" style="width:100%; height:auto;"></div>';
+            }
+
+            $safeHtml = json_encode($headerImgTag, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES);
             
-            $headerImgTag = '<div class="custom-journal-header"><img src="' . htmlspecialchars($defaultImageUrl, ENT_QUOTES, 'UTF-8') . '" alt="Default Journal Header" style="width:100%; height:auto;"></div>';
-        }
+            $script = "<script>\n" .
+                      "document.addEventListener('DOMContentLoaded', function() {\n" .
+                      "    var tempDiv = document.createElement('div');\n" .
+                      "    tempDiv.innerHTML = " . $safeHtml . ";\n" .
+                      "    document.body.insertBefore(tempDiv.firstChild, document.body.firstChild);\n" .
+                      "});\n" .
+                      "</script>";
 
-        $existingHeadData = $templateMgr->getTemplateVars('additionalHeadData') ?? '';
-        $templateMgr->assign('additionalHeadData', $existingHeadData . $headerImgTag);
+            $templateMgr->addHeader('customApiPackHeaderImg', $script);
+        }
 
         return false; 
     }
