@@ -77,9 +77,16 @@ class CustomApiPackPlugin extends GenericPlugin {
             $issue = Repo::issue()->newDataObject();
             $issue->setJournalId($context->getId());
             $issue->setPublished(1);
+            $datePublished = !empty($params['date_published']) ? $params['date_published'] : date('Y-m-d H:i:s');
+            $issue->setDatePublished($datePublished);
+            
             $issue->setYear((int)$params['year']);
             $issue->setVolume(isset($params['volume']) ? (int)$params['volume'] : null);
             $issue->setNumber(isset($params['number']) ? $params['number'] : null);
+            $issue->setShowVolume(isset($params['volume']) ? 1 : 0);
+            $issue->setShowNumber(isset($params['number']) ? 1 : 0);
+            $issue->setShowYear(1);
+            $issue->setShowTitle(1);
             
             $primaryLocale = $context->getPrimaryLocale();
             $issue->setTitle($params['title'], $primaryLocale);
