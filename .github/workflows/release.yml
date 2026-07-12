@@ -74,17 +74,18 @@ jobs:
       - name: Menyiapkan Arsip Plugin untuk OJS
         run: |
           # OJS mengharuskan nama folder di dalam arsip sama persis dengan nama direktori plugin
-          cd ..
+          # Karena nama repositori clone di GitHub bisa berbeda, kita salin ke folder sementara
+          mkdir -p /tmp/customApiPack
           
-          # Buat file tar.gz dan kecualikan file-file sistem/git yang tidak diperlukan oleh OJS
-          tar -czf customApiPack-${VERSION}.tar.gz \
-            --exclude='customApiPack/.git' \
-            --exclude='customApiPack/.github' \
-            --exclude='customApiPack/.gitignore' \
-            --exclude='customApiPack/README.md' \
-            customApiPack
-            
-          mv customApiPack-${VERSION}.tar.gz customApiPack/
+          # Salin semua isi repositori ke folder sementara (kecualikan file sistem)
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.gitignore' --exclude='README.md' ./ /tmp/customApiPack/
+          
+          # Masuk ke folder sementara dan buat arsip tar.gz
+          cd /tmp
+          tar -czf customApiPack-${{ env.VERSION }}.tar.gz customApiPack
+          
+          # Pindahkan file tar.gz yang sudah jadi kembali ke root repository
+          mv customApiPack-${{ env.VERSION }}.tar.gz ${{ github.workspace }}/
 
       - name: Buat GitHub Release
         uses: softprops/action-gh-release@v2
