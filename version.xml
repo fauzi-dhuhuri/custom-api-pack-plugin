@@ -3,7 +3,7 @@
 <version>
 	<application>customApiPack</application>
 	<type>plugins.generic</type>
-	<release>1.0.5.0</release>
+	<release>1.0.5.1</release>
 	<date>2026-07-12</date>
 	<status>0</status>
 	<lazy-load>0</lazy-load>
