@@ -1,0 +1,94 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versi rilis (contoh: 1.0.5.0)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ""
+      DATE: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Menentukan Versi dan Tanggal
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          
+          # Hapus huruf 'v' jika pengguna tidak sengaja memasukkannya di workflow_dispatch
+          VERSION=${VERSION#v}
+          
+          CURRENT_DATE=$(date +'%Y-%m-%d')
+          
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "DATE=$CURRENT_DATE" >> $GITHUB_ENV
+
+      - name: Update version.xml
+        run: |
+          # Mengupdate tag <release> dan <date> menggunakan regex
+          sed -i -E "s|<release>.*</release>|<release>${VERSION}</release>|g" version.xml
+          sed -i -E "s|<date>.*</date>|<date>${DATE}</date>|g" version.xml
+          
+          echo "Berhasil update version.xml ke Versi: ${VERSION} dan Tanggal: ${DATE}"
+
+      - name: Commit Perubahan ke Repository
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add version.xml
+          
+          # Cek apakah ada perubahan sebelum melakukan commit
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore(release): update version.xml ke ${VERSION}"
+            git push
+          else
+            echo "Tidak ada perubahan pada version.xml."
+          fi
+
+      - name: Buat Tag (Jika dipicu secara manual)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # Buat tag git baru dan push ke repository
+          git tag "v${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Menyiapkan Arsip Plugin untuk OJS
+        run: |
+          # OJS mengharuskan nama folder di dalam arsip sama persis dengan nama direktori plugin
+          cd ..
+          
+          # Buat file tar.gz dan kecualikan file-file sistem/git yang tidak diperlukan oleh OJS
+          tar -czf customApiPack-${VERSION}.tar.gz \
+            --exclude='customApiPack/.git' \
+            --exclude='customApiPack/.github' \
+            --exclude='customApiPack/.gitignore' \
+            --exclude='customApiPack/README.md' \
+            customApiPack
+            
+          mv customApiPack-${VERSION}.tar.gz customApiPack/
+
+      - name: Buat GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.VERSION }}"
+          files: customApiPack-${{ env.VERSION }}.tar.gz
+          generate_release_notes: true
